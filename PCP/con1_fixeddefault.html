@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <script type="text/javascript" src="../d3_v3/d3.v3.js"></script>
+    <style type="text/css">
+
+svg {
+  font-size: 12px;
+  font-family: Helvetica, sans-serif;
+}
+
+h2 {
+  font-family: Helvetica, sans-serif;
+}
+
+text{
+  font-family: Helvetica, sans-serif;
+}
+
+p{
+  font-family: Helvetica, sans-serif;
+  font-size: 12px;
+  color: #474747;
+}
+
+.foreground path {
+  fill: none;
+  stroke-opacity: .5;
+  stroke-width: 1.5px;
+}
+
+.foreground path.fade {
+  stroke-opacity: 0;
+}
+
+.legend text {
+  font-size: 12px;
+  font-style: normal;
+  fill: #474747;
+}
+
+.legend line {
+  stroke-width: 2px;
+}
+
+.USA{ stroke: #ffcc00;  }
+.Europe{ stroke: #0058b8; }
+.Japan{ stroke:#e94c0a; }
+
+.brush .extent {
+  fill: #9dc2db;
+  fill-opacity: .4;
+  stroke: #fff;
+  shape-rendering: crispEdges;
+}
+
+.axis line, .axis path {
+  fill: none;
+  stroke: #474747;
+  stroke-width: 1.5px;
+  shape-rendering: crispEdges;
+}
+
+.axis text {
+  font-size: 13px;
+  font-weight: bold;
+  text-shadow: 0 1px 0 #fff, 1px 0 0 #fff, 0 -1px 0 #fff, -1px 0 0 #fff;
+  color: #474747;
+}
+
+.axis text.label {
+  font-size: 13px;
+  fill: #474747;
+  font-weight: normal;
+}
+
+    </style>
+  </head>
+  <body>
+    <h2 align = "center">Explore the characteristics of car types</h2>
+    <p align = "center" >Filter lines by dragging along the axis on that range.
+       Undo by clicking anywhere on the selected axis.</p>
+    <script type="text/javascript">
+
+var Origin = ["USA","Europe","Japan"],
+
+    traits = ["MPG", "Cylinders", "Horsepower", "Weight", "Acceleration",
+              "Model.Year", "Origin"];
+
+var m = [80, 160, 200, 160],
+    w = 1680 - m[1] - m[3],
+    h = 750 - m[0] - m[2];
+
+var x = d3.scale.ordinal().domain(traits).rangePoints([0, w]),
+    y = {};
+
+var line = d3.svg.line(),
+    axis = d3.svg.axis().orient("left"),
+    foreground;
+
+var svg = d3.select("body").append("svg:svg")
+    .attr("width", w + m[1] + m[3])
+    .attr("height", h + m[2] + 100)
+  .append("svg:g")
+    .attr("transform", "translate(" + m[0] + "," + m[0]/5 + ")");
+
+d3.csv("cars_clean.csv", function(data) {
+
+  // Create a scale and brush for each trait.
+  traits.forEach(function(d) {
+    // Coerce values to numbers.
+    data.forEach(function(p) { if (d != "Origin"){ p[d] = +p[d]}; });
+        if (d != "Origin" && d != "Cylinders") {
+            y[d] = d3.scale.linear()
+                .domain(d3.extent(data, function(p) { return p[d]; }))
+                .range([h, 0]);
+
+        } else if (d == "Origin"){
+
+          y[d] = d3.scale.ordinal()
+                         .domain(["USA", "Europe", "Japan"])
+                         .rangePoints([h,0])
+                         ;
+
+        } else {
+
+          y[d] = d3.scale.ordinal()
+                          .domain([3,4,5,6,8])
+                          .rangePoints([h,0]);
+        }
+
+    y[d].brush = d3.svg.brush()
+        .y(y[d])
+        .on("brush", brush);
+     });
+
+
+  // Add a legend.
+  var legend = svg.selectAll("g.legend")
+      .data(Origin)
+    .enter().append("svg:g")
+      .attr("class", "legend")
+      .attr("transform", function(d, i) {
+              return "translate(" + ((w/2) - 25) + "," + (i * 16) + ")"; });
+
+  legend.append("svg:line")
+      .attr("class", String)
+      .attr("x2", 8);
+
+  legend.append("svg:text")
+      .attr("x", 12)
+      .attr("dy", ".31em")
+      .text(function(d) { return d; });
+
+  // Add foreground lines.
+  foreground = svg.append("svg:g")
+      .attr("class", "foreground")
+      .attr("transform", "translate(0,80)")
+    .selectAll("path")
+      .data(data)
+    .enter().append("svg:path")
+      .attr("d", path)
+      .attr("class", function(d) { return d.Origin; });
+
+  // Add a group element for each trait.
+  var g = svg.selectAll(".trait")
+      .data(traits)
+    .enter().append("svg:g")
+      .attr("class", "trait")
+      .attr("transform", function(d) { return "translate(" + x(d) + ", 80)"; });
+
+  // Add an axis and title.
+  g.append("svg:g")
+      .attr("class", "axis")
+      .each(function(d) {
+        d3.select(this).call(axis.scale(y[d]));
+          })
+    .append("svg:text")
+      .attr("text-anchor", "middle")
+      .attr("y", -12)
+      .attr("class", "label")
+      .text(String)
+    .append("title")
+      .text("Drag to reorder");
+
+  // Add a brush for each axis.
+  g.append("svg:g")
+      .attr("class", "brush")
+      .each(function(d) { d3.select(this).call(y[d].brush); })
+    .selectAll("rect")
+      .attr("x", -20)
+      .attr("width", 40)
+      .append("title")
+        .text("Drag up or down to brush along this axis");
+
+});
+
+// Returns the path for a given data point.
+function path(d) {
+  return line(traits.map(function(p) { return [x(p), y[p](d[p])]; }));
+}
+
+// Handles a brush event, toggling the display of foreground lines.
+function brush() {
+  var actives = traits.filter(trait => !y[trait].brush.empty()),
+      extents = actives.map(trait => y[trait].brush.extent()),
+      rescales = actives.map( trait => (y[trait].invert)? x => x : x => y[trait](x));
+  foreground.classed("fade", function(d) {
+    return !actives.every(function(p, i) {
+      var scale = rescales[i];
+      var value = d[p];
+      return extents[i][0] <= scale(value) && scale(value) <= extents[i][1];
+    });
+  });
+}
+    </script>
+  </body>
+</html>
